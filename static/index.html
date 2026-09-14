@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>正心 · 觉察日记</title>
+<style>
+  :root{
+    --paper:#FBFAF6;
+    --panel:#FFFFFF;
+    --line:#E4DFD4;
+    --ink:#45423C;
+    --ink-soft:#8F8A80;
+    --ink-faint:#B5AFA4;
+    --accent:#C9B9A6;
+    --accent-ink:#8A7A66;
+    --bubble-user:#F1ECE3;
+    --bubble-ai:#FFFFFF;
+    --danger:#B9807C;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif;
+    background:#EDEAE2;color:var(--ink);height:100vh;display:flex;flex-direction:column;
+    -webkit-font-smoothing:antialiased;
+  }
+  /* 顶栏 */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 24px;background:var(--paper);border-bottom:1px solid var(--line);
+  }
+  .brand{font-size:16px;font-weight:600;letter-spacing:2px}
+  .brand .sub{font-size:12px;color:var(--ink-soft);font-weight:400;letter-spacing:1px;margin-left:8px}
+  .actions{display:flex;align-items:center;gap:14px}
+  #todayStatus{font-size:12px;color:var(--ink-soft)}
+  .ghost{
+    border:1px solid var(--line);background:transparent;color:var(--ink-soft);
+    font-size:12px;padding:6px 12px;border-radius:6px;cursor:pointer;
+  }
+  .ghost:hover{border-color:var(--accent);color:var(--accent-ink)}
+  /* 主区 */
+  main{flex:1;display:grid;grid-template-columns:1fr 340px;min-height:0}
+  /* 聊天区 */
+  .chat{display:flex;flex-direction:column;min-height:0;background:var(--paper)}
+  .messages{flex:1;overflow-y:auto;padding:24px 24px 12px;display:flex;flex-direction:column;gap:16px}
+  .msg{max-width:72%;display:flex;flex-direction:column}
+  .msg.user{align-self:flex-end;align-items:flex-end}
+  .msg.ai{align-self:flex-start;align-items:flex-start}
+  .bubble{
+    padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.7;
+    white-space:pre-wrap;word-break:break-word;
+  }
+  .msg.user .bubble{background:var(--bubble-user);border-bottom-right-radius:4px}
+  .msg.ai .bubble{background:var(--bubble-ai);border:1px solid var(--line);border-bottom-left-radius:4px}
+  .meta{font-size:10.5px;color:var(--ink-faint);margin-top:4px}
+  .tagged{display:inline-flex;gap:4px;flex-wrap:wrap;margin-top:6px}
+  .tag{font-size:10.5px;color:var(--accent-ink);background:rgba(201,185,166,.16);padding:2px 8px;border-radius:10px}
+  .composer{
+    display:flex;gap:10px;align-items:center;padding:14px 20px;border-top:1px solid var(--line);background:var(--panel);
+  }
+  #slot{
+    border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font-size:13px;padding:9px 8px;border-radius:8px;cursor:pointer;
+  }
+  #input{
+    flex:1;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    font-size:14px;padding:10px 14px;border-radius:10px;outline:none;
+  }
+  #input:focus{border-color:var(--accent)}
+  #send{
+    border:none;background:var(--accent);color:#fff;font-size:13px;letter-spacing:1px;
+    padding:10px 20px;border-radius:10px;cursor:pointer;
+  }
+  #send:disabled{opacity:.5;cursor:default}
+  /* 右侧面板 */
+  .panel{
+    background:var(--panel);border-left:1px solid var(--line);padding:22px 20px;overflow-y:auto;
+  }
+  .panel h2{font-size:13px;font-weight:600;letter-spacing:2px;margin-bottom:16px}
+  .field{margin-bottom:16px}
+  .field .label{font-size:11px;color:var(--ink-soft);letter-spacing:1px;margin-bottom:5px}
+  .field .value{font-size:13.5px;line-height:1.7}
+  .field .value .empty{color:var(--ink-faint)}
+  .pill{display:inline-block;background:var(--bubble-user);border-radius:6px;padding:2px 8px;margin:2px 4px 2px 0;font-size:12.5px}
+  .saved-hint{font-size:11px;color:var(--ink-faint);margin-top:8px;line-height:1.6}
+  /* 设置弹层 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.28);display:none;align-items:center;justify-content:center;z-index:10}
+  .modal.open{display:flex}
+  .modal-box{background:var(--panel);border-radius:14px;padding:24px;width:420px;max-width:90vw}
+  .modal-box h3{font-size:15px;margin-bottom:6px}
+  .modal-box p{font-size:12px;color:var(--ink-soft);line-height:1.7;margin-bottom:14px}
+  .modal-box input{
+    width:100%;border:1px solid var(--line);padding:10px 12px;border-radius:8px;font-size:13px;margin-bottom:14px;outline:none;
+  }
+  .modal-box input:focus{border-color:var(--accent)}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px}
+  .btn-primary{border:none;background:var(--accent);color:#fff;padding:8px 18px;border-radius:8px;cursor:pointer;font-size:13px}
+  .greet{color:var(--ink-soft);font-size:13px;line-height:1.8}
+  .sysline{text-align:center;font-size:11px;color:var(--ink-faint);margin:2px 0;letter-spacing:.5px}
+  .review-box{width:600px;max-width:92vw;max-height:82vh;overflow-y:auto}
+  .review-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+  .rv-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+  .rv-card{background:var(--paper);border:1px solid var(--line);border-radius:10px;padding:14px 10px;text-align:center}
+  .rv-num{font-size:20px;font-weight:600}
+  .rv-label{font-size:11px;color:var(--ink-soft);margin-top:4px}
+  .review-box h4{font-size:12px;letter-spacing:1px;margin:16px 0 6px;color:var(--ink-soft)}
+  .rv-table{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:8px}
+  .rv-table th,.rv-table td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left}
+  .rv-table th{color:var(--ink-soft);font-weight:500;font-size:11.5px}
+  .rv-line{font-size:13px;color:var(--ink-soft);margin:6px 0}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">正心<span class="sub">觉察日记</span></div>
+  <div class="actions">
+    <span id="todayStatus"></span>
+    <button class="ghost" onclick="openReview()">复盘</button>
+    <button class="ghost" onclick="openSettings()">设置</button>
+  </div>
+</header>
+
+<main>
+  <!-- 聊天区 -->
+  <section class="chat">
+    <div id="messages" class="messages"></div>
+    <div class="composer">
+      <select id="slot">
+        <option value="">时段自动</option>
+        <option value="早餐">早餐</option>
+        <option value="午餐">午餐</option>
+        <option value="加餐">加餐</option>
+        <option value="晚餐">晚餐</option>
+        <option value="睡前">睡前</option>
+      </select>
+      <input id="input" placeholder="今天怎么样？聊两句就行，剩下的我来记…" />
+      <button id="send" onclick="send()">发送</button>
+    </div>
+  </section>
+
+  <!-- 今日已记录 -->
+  <aside class="panel">
+    <h2>今天已记录</h2>
+    <div id="stateView"></div>
+    <div class="saved-hint">每次聊完自动合并写进<br>Obsidian 每日日志（jiahui-knowledge/每日日志）</div>
+  </aside>
+</main>
+
+<!-- 复盘弹层 -->
+<div class="modal" id="reviewModal">
+  <div class="modal-box review-box">
+    <div class="review-head">
+      <h3>复盘</h3>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" id="btnMonth" onclick="loadReview(1)">月度</button>
+        <button class="ghost" id="btnQuarter" onclick="loadReview(3)">季度</button>
+        <button class="ghost" onclick="closeReview()">关闭</button>
+      </div>
+    </div>
+    <div id="reviewBody"></div>
+  </div>
+</div>
+
+<!-- 设置弹层 -->
+<div class="modal" id="settingsModal">
+  <div class="modal-box">
+    <h3>设置</h3>
+    <p>填入 DeepSeek API Key（sk- 开头），只存本地 config.json，不上传。</p>
+    <input id="apiKeyInput" type="password" placeholder="sk-..." />
+    <div class="modal-actions">
+      <button class="ghost" onclick="closeSettings()">取消</button>
+      <button class="btn-primary" onclick="saveKey()">保存</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let messages = [];      // {role, content}
+let todayState = {};
+
+const slotSel = document.getElementById('slot');
+const inputEl = document.getElementById('input');
+const sendBtn = document.getElementById('send');
+
+// 时段自动检测
+function autoSlot(){
+  const h = new Date().getHours();
+  if (h < 10) return '早餐';
+  if (h < 14) return '午餐';
+  if (h < 17) return '加餐';
+  if (h < 21) return '晚餐';
+  return '睡前';
+}
+function nowTime(){
+  const d = new Date();
+  return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+async function boot(){
+  // 默认时段
+  slotSel.value = autoSlot();
+  // 检查 key
+  const cfg = await fetch('/api/config').then(r=>r.json());
+  if (!cfg.has_key) openSettings();
+  // 读今日状态
+  await loadState();
+}
+
+async function loadState(){
+  const r = await fetch('/api/state').then(r=>r.json());
+  todayState = r.state || {};
+  document.getElementById('todayStatus').textContent = r.date.replace(/-/g,'.') + ' · ' + (Object.keys(todayState).length ? '已记录' : '还没写');
+  renderState();
+  if (!Object.keys(todayState).length && !messages.length){
+    addGreet();
+  }
+}
+
+function addGreet(){
+  const d = document.createElement('div');
+  d.className = 'msg ai';
+  d.innerHTML = '<div class="bubble greet">今天过得怎么样？随便聊几句——吃了什么、睡得好不好、心情如何，我来帮你记。</div>';
+  document.getElementById('messages').appendChild(d);
+  scrollBottom();
+}
+
+function addMessage(role, text, slot, extracted){
+  const wrap = document.createElement('div');
+  wrap.className = 'msg ' + (role==='user'?'user':'ai');
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.textContent = text;
+  wrap.appendChild(bubble);
+
+  const meta = document.createElement('div');
+  meta.className = 'meta';
+  let metaText = nowTime();
+  if (slot && role==='user') metaText += ' · ' + slot;
+  meta.textContent = metaText;
+  wrap.appendChild(meta);
+
+  if (extracted && Object.keys(extracted).length){
+    const tags = document.createElement('div');
+    tags.className = 'tagged';
+    const t = [];
+    const s = extracted['睡眠']||{};
+    if (s['精气神']) t.push('精气神 '+s['精气神']);
+    (extracted['饮食']||[]).forEach(m=>{ if(m['饱腹']) t.push(m['餐']+'·'+m['饱腹']); });
+    if (extracted['情绪']) t.push('情绪');
+    const links = extracted['正向链接']||{};
+    if (Object.values(links).some(Boolean)) t.push('正向链接');
+    if (extracted['好事发生']) t.push('好事');
+    if (extracted['关于今天']) t.push('关于今天');
+    if ((extracted['记账']||[]).length) t.push('记账');
+    t.forEach(x=>{ const sp=document.createElement('span'); sp.className='tag'; sp.textContent=x; tags.appendChild(sp); });
+    wrap.appendChild(tags);
+  }
+
+  document.getElementById('messages').appendChild(wrap);
+  scrollBottom();
+}
+
+function scrollBottom(){
+  const m = document.getElementById('messages');
+  m.scrollTop = m.scrollHeight;
+}
+
+function addSystemLine(text){
+  const d = document.createElement('div');
+  d.className = 'sysline';
+  d.textContent = text;
+  document.getElementById('messages').appendChild(d);
+  scrollBottom();
+}
+
+async function send(){
+  const text = inputEl.value.trim();
+  if (!text) return;
+  const slot = slotSel.value;
+  const content = slot ? `（现在时段：${slot}）` + text : text;
+  messages.push({role:'user', content});
+  addMessage('user', text, slot, null);
+  inputEl.value = '';
+  sendBtn.disabled = true;
+
+  try{
+    const r = await fetch('/api/chat', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({messages})
+    });
+    const data = await r.json();
+    if (data.error){
+      addMessage('ai', '⚠ ' + data.error, null, null);
+      if (data.error.includes('Key')) openSettings();
+      return;
+    }
+    messages.push({role:'assistant', content: data.reply});
+    addMessage('ai', data.reply, null, data.extracted || {});
+    if (data.extracted && (data.extracted['记账']||[]).length){
+      let exp=0, inc=0;
+      data.extracted['记账'].forEach(t=>{const a=parseFloat(t['金额'])||0; if(t['类型']==='收入') inc+=a; else exp+=a;});
+      addSystemLine('今日支出 ¥'+exp+' · 收入 ¥'+inc+'（系统自动算）');
+    }
+    todayState = data.extracted || todayState;
+    renderState();
+    document.getElementById('todayStatus').textContent = '已记录';
+  }catch(e){
+    addMessage('ai', '⚠ 网络或服务出错：' + e.message, null, null);
+  }finally{
+    sendBtn.disabled = false;
+    inputEl.focus();
+  }
+}
+
+inputEl.addEventListener('keydown', e=>{ if (e.key==='Enter') send(); });
+
+// 渲染右侧面板
+function renderState(){
+  const el = document.getElementById('stateView');
+  if (!Object.keys(todayState).length){
+    el.innerHTML = '<div class="field"><div class="value"><span class="empty">还空着。聊两句就开始记。</span></div></div>';
+    return;
+  }
+  let html = '';
+  const s = todayState['睡眠']||{};
+  html += '<div class="field"><div class="label">睡眠</div><div class="value">' + (s['入睡']?('入睡 '+s['入睡']+' · '):'') + (s['起床']?('起床 '+s['起床']):'') + (s['精气神']?(' · 精气神 '+s['精气神']+'/5'):'') + ((!s['入睡']&&!s['起床']&&!s['精气神'])?'<span class="empty">—</span>':'') + '</div></div>';
+
+  const meals = todayState['饮食']||[];
+  if (meals.length){
+    html += '<div class="field"><div class="label">饮食</div><div class="value">' + meals.map(m=>`<span class="pill">${m['餐']||''}${m['饱腹']?'·'+m['饱腹']:''}</span>`).join('') + '</div></div>';
+  }
+  if (todayState['情绪']) html += '<div class="field"><div class="label">情绪</div><div class="value">'+todayState['情绪']+'</div></div>';
+  const links = todayState['正向链接']||{};
+  const lk = Object.entries(links).filter(([k,v])=>v);
+  if (lk.length) html += '<div class="field"><div class="label">正向链接</div><div class="value">'+lk.map(([k,v])=>`<span class="pill">${k}·${v}</span>`).join('')+'</div></div>';
+  if (todayState['好事发生']) html += '<div class="field"><div class="label">好事发生</div><div class="value">'+todayState['好事发生']+'</div></div>';
+  if (todayState['关于今天']) html += '<div class="field"><div class="label">关于今天</div><div class="value">'+todayState['关于今天']+'</div></div>';
+  const txns = todayState['记账']||[];
+  if (txns.length){
+    let exp=0, inc=0;
+    txns.forEach(t=>{ const a=parseFloat(t['金额'])||0; if(t['类型']==='收入') inc+=a; else exp+=a; });
+    html += '<div class="field"><div class="label">记账</div><div class="value">'
+      + txns.map(t=>`<span class="pill">${t['类型']==='收入'?'+':'-'}${t['金额']} ${t['分类']||''}</span>`).join('')
+      + '</div><div class="value" style="font-size:12px;color:var(--ink-soft);margin-top:4px">支出 ¥'+exp+' · 收入 ¥'+inc+'</div></div>';
+  }
+  el.innerHTML = html;
+}
+
+// 设置
+function openSettings(){ document.getElementById('settingsModal').classList.add('open'); }
+function closeSettings(){ document.getElementById('settingsModal').classList.remove('open'); }
+async function saveKey(){
+  const key = document.getElementById('apiKeyInput').value.trim();
+  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deepseek_api_key: key})});
+  closeSettings();
+  loadState();
+}
+
+// 复盘
+async function openReview(){ document.getElementById('reviewModal').classList.add('open'); await loadReview(1); }
+function closeReview(){ document.getElementById('reviewModal').classList.remove('open'); }
+async function loadReview(months){
+  const r = await fetch('/api/review?months='+months).then(x=>x.json());
+  const acc = r['记账']||{};
+  const b = document.getElementById('reviewBody');
+  let html = '';
+  html += '<div class="rv-cards">'
+    + '<div class="rv-card"><div class="rv-num">¥'+acc['总支出']+'</div><div class="rv-label">总支出</div></div>'
+    + '<div class="rv-card"><div class="rv-num">¥'+acc['总收入']+'</div><div class="rv-label">总收入</div></div>'
+    + '<div class="rv-card"><div class="rv-num">¥'+acc['结余']+'</div><div class="rv-label">结余</div></div>'
+    + '<div class="rv-card"><div class="rv-num">'+r['active_days']+'</div><div class="rv-label">记录天数</div></div>'
+    + '</div>';
+  const expCat = acc['支出分类']||{};
+  if (Object.keys(expCat).length){
+    html += '<h4>支出分类</h4><table class="rv-table"><tr><th>分类</th><th>金额</th></tr>';
+    for (const [k,v] of Object.entries(expCat)) html += '<tr><td>'+k+'</td><td>¥'+v+'</td></tr>';
+    html += '</table>';
+  }
+  if (r['睡眠'] && r['睡眠']['平均精气神']) html += '<div class="rv-line">平均精气神：'+r['睡眠']['平均精气神']+'/5（'+r['睡眠']['记录天数']+'天）</div>';
+  const links = r['正向链接']||{};
+  if (Object.keys(links).length) html += '<div class="rv-line">正向链接：'+Object.entries(links).map(([k,v])=>k+' ×'+v).join(' · ')+'</div>';
+  const sati = (r['饮食']&&r['饮食']['饱腹分布'])||{};
+  if (Object.keys(sati).length) html += '<div class="rv-line">饱腹分布：'+Object.entries(sati).map(([k,v])=>k+' ×'+v).join(' · ')+'</div>';
+  if (r['好事天数']) html += '<div class="rv-line">好事天数：'+r['好事天数']+'天</div>';
+  b.innerHTML = html;
+  document.getElementById('btnMonth').style.borderColor = months===1 ? 'var(--accent)' : '';
+  document.getElementById('btnQuarter').style.borderColor = months===3 ? 'var(--accent)' : '';
+}
+
+boot();
+</script>
+</body>
+</html>
