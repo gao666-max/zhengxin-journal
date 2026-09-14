@@ -143,7 +143,7 @@
   <aside class="panel">
     <h2>今天已记录</h2>
     <div id="stateView"></div>
-    <div class="saved-hint">每次聊完自动合并写进<br>Obsidian 每日日志（jiahui-knowledge/每日日志）</div>
+    <div class="saved-hint">每次聊完自动合并写进<br>Obsidian 每日日志（路径在设置里配）</div>
   </aside>
 </main>
 
@@ -166,8 +166,10 @@
 <div class="modal" id="settingsModal">
   <div class="modal-box">
     <h3>设置</h3>
-    <p>填入 DeepSeek API Key（sk- 开头），只存本地 config.json，不上传。</p>
+    <p>DeepSeek API Key（sk- 开头），只存本地 config.json，不上传。</p>
     <input id="apiKeyInput" type="password" placeholder="sk-..." />
+    <p style="margin-top:12px">Obsidian 每日日志目录（留空则写到本地「每日日志」文件夹）</p>
+    <input id="vaultInput" type="text" placeholder="例如 D:\Obsidian\我的库\每日日志" />
     <div class="modal-actions">
       <button class="ghost" onclick="closeSettings()">取消</button>
       <button class="btn-primary" onclick="saveKey()">保存</button>
@@ -348,11 +350,16 @@ function renderState(){
 }
 
 // 设置
-function openSettings(){ document.getElementById('settingsModal').classList.add('open'); }
+async function openSettings(){
+  const cfg = await fetch('/api/config').then(r=>r.json());
+  document.getElementById('vaultInput').value = cfg.obsidian_vault || '';
+  document.getElementById('settingsModal').classList.add('open');
+}
 function closeSettings(){ document.getElementById('settingsModal').classList.remove('open'); }
 async function saveKey(){
   const key = document.getElementById('apiKeyInput').value.trim();
-  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deepseek_api_key: key})});
+  const vault = document.getElementById('vaultInput').value.trim();
+  await fetch('/api/config', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({deepseek_api_key: key, obsidian_vault: vault})});
   closeSettings();
   loadState();
 }

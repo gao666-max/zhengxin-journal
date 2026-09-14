@@ -20,9 +20,6 @@ STATIC_DIR = APP_DIR / "static"
 DATA_DIR = APP_DIR / "data"
 CONFIG_FILE = APP_DIR / "config.json"
 
-# Obsidian vault：每日日志目录（佳慧的 jiahui-knowledge）
-VAULT_DAILY = Path(r"C:\Users\TX\Desktop\jiahui-knowledge\每日日志")
-
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
 MODEL = "deepseek-chat"
 
@@ -77,6 +74,14 @@ def save_config(cfg):
 
 def get_api_key():
     return os.environ.get("DEEPSEEK_API_KEY", "") or load_config().get("deepseek_api_key", "")
+
+
+def get_vault_dir():
+    """Obsidian 每日日志目录：从 config.json 的 obsidian_vault 读，没配就落到本地 ./每日日志"""
+    vault = load_config().get("obsidian_vault", "").strip()
+    if vault:
+        return Path(vault)
+    return APP_DIR / "每日日志"
 
 
 # ---------- 今日状态 ----------
@@ -236,8 +241,9 @@ def write_to_obsidian(state):
     md = render_markdown(state)
     if not md:
         return
-    f = VAULT_DAILY / obsidian_filename()
-    VAULT_DAILY.mkdir(parents=True, exist_ok=True)
+    vault = get_vault_dir()
+    f = vault / obsidian_filename()
+    vault.mkdir(parents=True, exist_ok=True)
     existing = f.read_text(encoding="utf-8") if f.exists() else ""
     start, end = "<!-- 正心觉察 start -->", "<!-- 正心觉察 end -->"
     if start in existing and end in existing:
@@ -363,24 +369,32 @@ def index():
 
 @app.get("/api/state")
 def get_state():
-    return {"date": date_key(), "state": load_state(), "saved_file": str(VAULT_DAILY / obsidian_filename())}
+    return {"date": date_key(), "state": load_state(), "saved_file": str(get_vault_dir() / obsidian_filename())}
 
 
 @app.post("/api/config")
 async def set_config(payload: dict):
     cfg = load_config()
-    key = (payload.get("deepseek_api_key") or "").strip()
-    if key:
-        cfg["deepseek_api_key"] = key
-    else:
-        cfg.pop("deepseek_api_key", None)
+    if "deepseek_api_key" in payload:
+        key = (payload.get("deepseek_api_key") or "").strip()
+        if key:
+            cfg["deepseek_api_key"] = key
+        else:
+            cfg.pop("deepseek_api_key", None)
+    if "obsidian_vault" in payload:
+        vault = (payload.get("obsidian_vault") or "").strip()
+        if vault:
+            cfg["obsidian_vault"] = vault
+        else:
+            cfg.pop("obsidian_vault", None)
     save_config(cfg)
-    return {"ok": True, "has_key": bool(get_api_key())}
+    return {"ok": True, "has_key": bool(get_api_key()), "obsidian_vault": cfg.get("obsidian_vault", "")}
 
 
 @app.get("/api/config")
 def get_config_status():
-    return {"has_key": bool(get_api_key())}
+    cfg = load_config()
+    return {"has_key": bool(get_api_key()), "obsidian_vault": cfg.get("obsidian_vault", "")}
 
 
 @app.post("/api/chat")
