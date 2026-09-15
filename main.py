@@ -487,7 +487,7 @@ def review(months: int = 1):
 @app.get("/api/sleep-week")
 def sleep_week():
     today = datetime.date.today()
-    rows = [(d, s) for d, s in list_daily_states() if 1 <= (today - d).days <= 7]
+    rows = [(d, s) for d, s in list_daily_states() if 0 <= (today - d).days <= 6]
     days = []
     for d, s in rows:
         sleep = (s or {}).get("睡眠") or {}
