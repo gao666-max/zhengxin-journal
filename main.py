@@ -46,10 +46,12 @@ SYSTEM_PROMPT = """你是「正心」，佳慧的私人觉察日记陪伴者。�
 - 记账：她明确说花了/赚了多少钱（有数字）才记；金额必须是她亲口说的数字，绝不编；只说吃了什么没提价格就不进记账
 - 记账分类：支出=餐饮/交通/购物/娱乐/居住/通讯/医疗/学习/人情/其他；收入=工资/兼职/红包/其他
 - 绝对不要在回复里心算或报总支出/总收入，只逐笔提取金额，总额由系统求和
+- memory：从她的话里提取【值得长期记住】的信息——她的偏好、目标、习惯、重要事件、反复提到的事。只有跨天有用、未来对话会用到才记（如「喜欢驴火和煎饼果子」「在准备投 AI 解决方案岗」）；当天的一次性琐事（如「今天吃了小笼包」）不记。没有就返回空数组。分类只用：偏好/目标/习惯/事件。
 
 示例（照这个标准提取）：
-她说「昨晚3点睡7点半起，早餐吃的小笼包配桃子」→ 睡眠记 3:00/7:30/4.5小时，饮食记早餐，记账是空数组（因为没提价格）。
+她说「昨晚3点睡7点半起，早餐吃的小笼包配桃子」→ 睡眠记 3:00/7:30/4.5小时，饮食记早餐，记账空数组（没提价格），memory 空数组（一次性琐事）。
 她说「午饭花了30，买书50」→ 记账记两笔：支出30餐饮、支出50学习。
+她说「我最近在准备投 AI 解决方案岗」→ memory 记一条：{"content":"在准备投 AI 解决方案岗","category":"目标"}。
 
 只返回 JSON，不要任何 JSON 以外的文字，也不要代码块：
 {
@@ -62,7 +64,8 @@ SYSTEM_PROMPT = """你是「正心」，佳慧的私人觉察日记陪伴者。�
     "好事发生": null,
     "关于今天": null,
     "记账": [{"类型": "支出", "金额": 0, "分类": "餐饮", "备注": null}]
-  }
+  },
+  "memory": [{"content": "长期记忆内容", "category": "偏好"}]
 }"""
 
 
@@ -113,6 +116,54 @@ def load_state():
 
 def save_state(state):
     state_file().write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+# ---------- 累积式长期记忆 ----------
+MEMORY_FILE = DATA_DIR / "memory.json"
+
+
+def load_memory():
+    if MEMORY_FILE.exists():
+        try:
+            return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
+        except Exception:
+            return {"entries": []}
+    return {"entries": []}
+
+
+def save_memory(data):
+    MEMORY_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def add_memories(items):
+    """追加长期记忆条目，按内容去重"""
+    mem = load_memory()
+    existing = {e.get("content") for e in mem.get("entries", []) if isinstance(e, dict)}
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        content = (item.get("content") or "").strip()
+        if content and content not in existing:
+            mem.setdefault("entries", []).append({
+                "content": content,
+                "category": item.get("category", "其他"),
+                "date": datetime.date.today().isoformat(),
+            })
+            existing.add(content)
+    save_memory(mem)
+    return mem
+
+
+def memory_context(limit=50):
+    """把长期记忆转成给 AI 的上下文片段"""
+    mem = load_memory()
+    entries = mem.get("entries", [])[-limit:]
+    if not entries:
+        return ""
+    lines = ["【长期记忆】她的一些偏好/目标/习惯（供参考，自然接续，不要刻意引用）："]
+    for e in entries:
+        lines.append(f"- [{e.get('category', '其他')}] {e.get('content', '')}")
+    return "\n".join(lines)
 
 
 def obsidian_filename():
@@ -451,8 +502,12 @@ async def chat(payload: dict):
 
     # 跨天记忆：最近几天的摘要，让 AI 更懂她的作息/习惯
     memory_note = build_memory()
+    # 累积式长期记忆：偏好/目标/习惯
+    long_memory_note = memory_context()
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if long_memory_note:
+        messages.append({"role": "system", "content": long_memory_note})
     if memory_note:
         messages.append({"role": "system", "content": memory_note})
     if context_note:
@@ -486,11 +541,15 @@ async def chat(payload: dict):
 
     reply = parsed.get("reply", "")
     extracted = parsed.get("extracted") or {}
+    memory_items = parsed.get("memory") or []
 
     # 合并 + 落盘
     merged = merge_extracted(load_state(), extracted)
     save_state(merged)
     write_to_obsidian(merged)
+    # 累积式长期记忆
+    if memory_items:
+        add_memories(memory_items)
 
     return {"reply": reply, "extracted": merged, "parse_error": False}
 
