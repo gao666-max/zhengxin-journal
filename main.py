@@ -281,6 +281,34 @@ def list_daily_states():
     return rows
 
 
+def build_memory(days=7):
+    """跨天记忆：最近 N 天（不含今天）的摘要，让对话更懂她、能接续习惯"""
+    today = datetime.date.today()
+    recent = [(d, s) for d, s in list_daily_states() if 1 <= (today - d).days <= days]
+    if not recent:
+        return ""
+    lines = [f"【最近 {days} 天的记忆】仅供参考，让对话更懂她、能接续她的习惯："]
+    for d, s in recent:
+        if not isinstance(s, dict) or not s:
+            continue
+        parts = []
+        sleep = s.get("睡眠") or {}
+        if sleep.get("入睡") and sleep.get("起床"):
+            parts.append(f"睡{sleep['入睡']}-{sleep['起床']}")
+        if sleep.get("精气神"):
+            parts.append(f"精气神{sleep['精气神']}/5")
+        txns = [t for t in (s.get("记账") or []) if isinstance(t, dict)]
+        if txns:
+            exp = sum(float(t.get("金额") or 0) for t in txns if t.get("类型") != "收入")
+            if exp:
+                parts.append(f"支出{exp:g}")
+        if s.get("情绪"):
+            parts.append(s["情绪"])
+        if parts:
+            lines.append(f"- {d.month}月{d.day}日：{'，'.join(parts)}")
+    return "\n".join(lines)
+
+
 def window_cutoff(months):
     """回到 (months-1) 个月前的月初"""
     today = datetime.date.today()
@@ -421,7 +449,12 @@ async def chat(payload: dict):
     if today_state:
         context_note = "她今天已经记录的觉察（供你参考、接续，不要重复追问）：\n" + json.dumps(today_state, ensure_ascii=False)
 
+    # 跨天记忆：最近几天的摘要，让 AI 更懂她的作息/习惯
+    memory_note = build_memory()
+
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    if memory_note:
+        messages.append({"role": "system", "content": memory_note})
     if context_note:
         messages.append({"role": "system", "content": context_note})
     messages.extend(history)
