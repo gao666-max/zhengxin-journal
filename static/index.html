@@ -108,6 +108,13 @@
   .rv-table th,.rv-table td{padding:7px 10px;border-bottom:1px solid var(--line);text-align:left}
   .rv-table th{color:var(--ink-soft);font-weight:500;font-size:11.5px}
   .rv-line{font-size:13px;color:var(--ink-soft);margin:6px 0}
+  .mem-item{display:flex;align-items:center;gap:8px;padding:8px 4px;border-bottom:1px solid var(--line);font-size:13px}
+  .mem-item:last-child{border-bottom:none}
+  .mem-cat{flex:none;font-size:10.5px;color:var(--accent-ink);background:rgba(201,185,166,.16);padding:1px 7px;border-radius:8px}
+  .mem-content{flex:1;color:var(--ink);line-height:1.5;word-break:break-word}
+  .mem-date{flex:none;font-size:10.5px;color:var(--ink-faint)}
+  .mem-item .x{border:none;background:none;color:var(--ink-faint);font-size:16px;cursor:pointer;padding:0 4px}
+  .mem-item .x:hover{color:#B9807C}
 </style>
 </head>
 <body>
@@ -117,6 +124,7 @@
   <div class="actions">
     <span id="todayStatus"></span>
     <button class="ghost" onclick="openReview()">复盘</button>
+    <button class="ghost" onclick="openMemory()">记忆</button>
     <button class="ghost" onclick="openSettings()">设置</button>
   </div>
 </header>
@@ -159,6 +167,20 @@
       </div>
     </div>
     <div id="reviewBody"></div>
+  </div>
+</div>
+
+<!-- 记忆管理弹层 -->
+<div class="modal" id="memoryModal">
+  <div class="modal-box review-box">
+    <div class="review-head">
+      <h3>记忆管理</h3>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" onclick="clearMemory()">清空全部</button>
+        <button class="ghost" onclick="closeMemory()">关闭</button>
+      </div>
+    </div>
+    <div id="memoryBody"></div>
   </div>
 </div>
 
@@ -393,6 +415,34 @@ async function loadReview(months){
   b.innerHTML = html;
   document.getElementById('btnMonth').style.borderColor = months===1 ? 'var(--accent)' : '';
   document.getElementById('btnQuarter').style.borderColor = months===3 ? 'var(--accent)' : '';
+}
+
+// 记忆管理
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+async function openMemory(){ document.getElementById('memoryModal').classList.add('open'); await loadMemory(); }
+function closeMemory(){ document.getElementById('memoryModal').classList.remove('open'); }
+async function loadMemory(){
+  const r = await fetch('/api/memory').then(x=>x.json());
+  const entries = r.entries || [];
+  const b = document.getElementById('memoryBody');
+  if (!entries.length){ b.innerHTML = '<div class="rv-line">还没记住什么，多聊几天就有了。</div>'; return; }
+  let html = '';
+  entries.forEach((e, i)=>{
+    html += '<div class="mem-item"><span class="mem-cat">'+esc(e.category||'其他')+'</span>'
+      + '<span class="mem-content">'+esc(e.content||'')+'</span>'
+      + '<span class="mem-date">'+esc(e.date||'')+'</span>'
+      + '<button class="x" onclick="deleteMemory('+i+')" title="删除">×</button></div>';
+  });
+  b.innerHTML = html;
+}
+async function deleteMemory(i){
+  await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',index:i})});
+  await loadMemory();
+}
+async function clearMemory(){
+  if(!confirm('确定清空所有记忆？')) return;
+  await fetch('/api/memory',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'clear'})});
+  await loadMemory();
 }
 
 boot();

@@ -484,6 +484,26 @@ def get_config_status():
     return {"has_key": bool(get_api_key()), "obsidian_vault": cfg.get("obsidian_vault", "")}
 
 
+@app.get("/api/memory")
+def get_memory():
+    return {"entries": load_memory().get("entries", [])}
+
+
+@app.post("/api/memory")
+async def manage_memory(payload: dict):
+    mem = load_memory()
+    action = payload.get("action")
+    if action == "delete":
+        idx = payload.get("index")
+        entries = mem.get("entries", [])
+        if isinstance(idx, int) and 0 <= idx < len(entries):
+            entries.pop(idx)
+    elif action == "clear":
+        mem["entries"] = []
+    save_memory(mem)
+    return {"entries": mem.get("entries", [])}
+
+
 @app.post("/api/chat")
 async def chat(payload: dict):
     api_key = get_api_key()
