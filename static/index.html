@@ -163,6 +163,7 @@
       <div style="display:flex;gap:8px">
         <button class="ghost" id="btnMonth" onclick="loadReview(1)">月度</button>
         <button class="ghost" id="btnQuarter" onclick="loadReview(3)">季度</button>
+        <button class="ghost" id="btnSleep" onclick="loadSleep()">睡眠</button>
         <button class="ghost" onclick="closeReview()">关闭</button>
       </div>
     </div>
@@ -415,6 +416,42 @@ async function loadReview(months){
   b.innerHTML = html;
   document.getElementById('btnMonth').style.borderColor = months===1 ? 'var(--accent)' : '';
   document.getElementById('btnQuarter').style.borderColor = months===3 ? 'var(--accent)' : '';
+}
+
+function nvl(v){ return (v===null || v===undefined || v==='') ? '—' : v; }
+async function loadSleep(){
+  const r = await fetch('/api/sleep-week').then(x=>x.json());
+  const b = document.getElementById('reviewBody');
+  const days = r.days || [];
+  let html = '<div class="rv-cards">'
+    + '<div class="rv-card"><div class="rv-num">'+r['记录天数']+'</div><div class="rv-label">记录天数</div></div>'
+    + '<div class="rv-card"><div class="rv-num">'+nvl(r['平均精气神'])+'</div><div class="rv-label">平均精气神</div></div>'
+    + '</div>';
+  if (!days.length){
+    b.innerHTML = html + '<div class="rv-line">最近 7 天还没有睡眠记录，先去聊几句。</div>';
+  } else {
+    html += '<h4>最近 7 天睡眠</h4><table class="rv-table"><tr><th>日期</th><th>入睡</th><th>起床</th><th>时长</th><th>精气神</th></tr>';
+    days.forEach(d=>{
+      html += '<tr><td>'+d['日期']+'</td><td>'+nvl(d['入睡'])+'</td><td>'+nvl(d['起床'])+'</td><td>'+nvl(d['时长'])+'</td><td>'+nvl(d['精气神'])+'</td></tr>';
+    });
+    html += '</table>';
+    html += '<button class="ghost" onclick="loadSleepAdvice()">让 AI 给建议</button>';
+    html += '<div id="sleepAdvice" class="rv-line" style="margin-top:10px"></div>';
+    b.innerHTML = html;
+  }
+  document.getElementById('btnMonth').style.borderColor = '';
+  document.getElementById('btnQuarter').style.borderColor = '';
+  document.getElementById('btnSleep').style.borderColor = 'var(--accent)';
+}
+async function loadSleepAdvice(){
+  const r0 = await fetch('/api/sleep-week').then(x=>x.json());
+  const days = r0.days || [];
+  if (!days.length) return;
+  const el = document.getElementById('sleepAdvice');
+  el.textContent = '正在分析…';
+  const r = await fetch('/api/sleep-advice',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({days})});
+  const data = await r.json();
+  el.textContent = data.advice || data.error || '';
 }
 
 // 记忆管理

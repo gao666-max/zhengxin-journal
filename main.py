@@ -39,6 +39,7 @@ SYSTEM_PROMPT = """你是「正心」，佳慧的私人觉察日记陪伴者。�
 - 她没提到的字段就留空，不要追问、不要强迫填满
 - 回复控制在 3 句话以内，除非她在深入聊某件事
 - 全程中文
+- 主动关心：如果从她的数据/长期记忆里发现健康信号（连续熬夜、睡眠不足、情绪持续低落、饮食异常），在回复里自然地温和提醒一句（如「你连续几天都 3 点后才睡，今晚早点？」）。要克制，只提醒、不催促、不评判。
 
 字段规则：
 - 饱腹感只从：空 / 舒适 / 很饱 / 撑 里选
@@ -446,6 +447,53 @@ def review(months: int = 1):
     result["窗口起始"] = cutoff.isoformat()
     result["窗口结束"] = datetime.date.today().isoformat()
     return result
+
+
+@app.get("/api/sleep-week")
+def sleep_week():
+    today = datetime.date.today()
+    rows = [(d, s) for d, s in list_daily_states() if 1 <= (today - d).days <= 7]
+    days = []
+    for d, s in rows:
+        sleep = (s or {}).get("睡眠") or {}
+        days.append({
+            "日期": f"{d.month}月{d.day}日",
+            "入睡": sleep.get("入睡"),
+            "起床": sleep.get("起床"),
+            "时长": sleep.get("时长"),
+            "精气神": sleep.get("精气神"),
+        })
+    spirits = [x["精气神"] for x in days if x["精气神"]]
+    return {
+        "days": days,
+        "记录天数": len(days),
+        "平均精气神": round(sum(spirits) / len(spirits), 1) if spirits else None,
+    }
+
+
+@app.post("/api/sleep-advice")
+async def sleep_advice(payload: dict):
+    api_key = get_api_key()
+    if not api_key:
+        return JSONResponse({"error": "未配置 DeepSeek API Key"}, status_code=400)
+    days = payload.get("days") or []
+    if not days:
+        return {"advice": "还没有足够的睡眠数据。"}
+    data_text = json.dumps(days, ensure_ascii=False)
+    prompt = "这是她最近 7 天的睡眠数据：" + data_text + "。用温和关心的语气，评估她的睡眠（入睡时间、时长、精气神趋势），给 1-2 条具体可执行的建议。不说教、不评判、不制造焦虑，3 句话以内。直接说，不要 JSON。"
+    try:
+        async with httpx.AsyncClient(timeout=60, trust_env=False) as client:
+            resp = await client.post(
+                DEEPSEEK_URL,
+                headers={"Content-Type": "application/json", "Authorization": "Bearer " + api_key},
+                json={"model": MODEL, "messages": [{"role": "user", "content": prompt}]},
+            )
+        resp.raise_for_status()
+        data = resp.json()
+        advice = data["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        return JSONResponse({"error": f"DeepSeek 调用失败：{e}"}, status_code=502)
+    return {"advice": advice}
 
 
 # ---------- 路由 ----------
