@@ -21,7 +21,7 @@ DATA_DIR = APP_DIR / "data"
 CONFIG_FILE = APP_DIR / "config.json"
 
 DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions"
-MODEL = "deepseek-chat"
+MODEL = "deepseek-v4-flash-vision-exp"
 
 DATA_DIR.mkdir(exist_ok=True)
 
