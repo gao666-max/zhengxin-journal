@@ -167,6 +167,41 @@ def memory_context(limit=50):
     return "\n".join(lines)
 
 
+GOAL_ASK_INTERVAL = 5  # 每隔多少天主动问一次目标进度
+
+
+def goals_due(days=GOAL_ASK_INTERVAL):
+    """返回该提醒进度的长期目标（超过 days 天没问过，或从未问过）"""
+    mem = load_memory()
+    asked = mem.get("goal_last_asked", {})
+    today = datetime.date.today()
+    due = []
+    for e in mem.get("entries", []):
+        if not isinstance(e, dict) or e.get("category") != "目标":
+            continue
+        content = e.get("content", "")
+        last = asked.get(content)
+        if last is None:
+            due.append(content)
+        else:
+            try:
+                if (today - datetime.date.fromisoformat(last)).days >= days:
+                    due.append(content)
+            except ValueError:
+                due.append(content)
+    return due
+
+
+def mark_goals_asked(contents):
+    """把提起过的目标标记为今天已问"""
+    mem = load_memory()
+    asked = mem.setdefault("goal_last_asked", {})
+    today = datetime.date.today().isoformat()
+    for c in contents:
+        asked[c] = today
+    save_memory(mem)
+
+
 def obsidian_filename():
     d = datetime.date.today()
     return f"{d.month}.{d.day}.md"
@@ -572,10 +607,15 @@ async def chat(payload: dict):
     memory_note = build_memory()
     # 累积式长期记忆：偏好/目标/习惯
     long_memory_note = memory_context()
+    # 该提醒进度的长期目标
+    due_goals = goals_due()
 
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     if long_memory_note:
         messages.append({"role": "system", "content": long_memory_note})
+    if due_goals:
+        due_note = "她设定的长期目标，有一阵没问进度了，请在回复里自然地温和问一句（最多一句，不要反复盘问）：\n" + "\n".join(f"- {g}" for g in due_goals)
+        messages.append({"role": "system", "content": due_note})
     if memory_note:
         messages.append({"role": "system", "content": memory_note})
     if context_note:
@@ -618,6 +658,9 @@ async def chat(payload: dict):
     # 累积式长期记忆
     if memory_items:
         add_memories(memory_items)
+    # 标记已问过进度的目标
+    if due_goals:
+        mark_goals_asked(due_goals)
 
     return {"reply": reply, "extracted": merged, "parse_error": False}
 
